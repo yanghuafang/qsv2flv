@@ -1,0 +1,91 @@
+# clang-tidy configuration for qsv2flv. Run with scripts/tidy.sh.
+#
+# Curated rather than "all of readability-* and modernize-*". Each family that
+# is off says why, so the exclusion can be re-argued rather than rediscovered.
+#
+# The bugprone-* entries are in because this program decodes a byte layout out
+# of an untrusted file, where the failure mode is a heap overflow rather than an
+# ugly line. cppcoreguidelines-virtual-class-destructor is in because Qt deletes
+# these classes through QObject*.
+#
+# Deliberately NOT enabled:
+#
+#   modernize-use-trailing-return-type
+#       Buries the return type, which is most of what these APIs are about.
+#   readability-magic-numbers
+#       Nearly every hit is a field offset in qsv/types.cc, checked line by line
+#       against the table in docs/QsvFormat.md. Naming them breaks exactly that
+#       correspondence.
+#   readability-identifier-length
+#       Flags `x`, `i`, `j`, `io`, `pb`. `x` is what the algorithm in
+#       qsv/crypto.cc is described with.
+#   readability-function-cognitive-complexity
+#       Remux() is one sequence with a cleanup tail; splitting it to reach a
+#       threshold scatters a lifetime.
+#   bugprone-easily-swappable-parameters
+#       Fires on every (buffer, size) pair, which is the shape of the job.
+#   cppcoreguidelines-owning-memory, cppcoreguidelines-pro-type-*
+#       Every reinterpret cast here is at the FFmpeg or <fstream> boundary.
+#   modernize-use-nodiscard
+#       Applied by hand. The check also wants it on the Qt overrides, where the
+#       framework calls them and the attribute says nothing.
+#
+# clang-analyzer-* is out of scope: the sanitizer job covers that ground with
+# far fewer false positives, on code that is actually running.
+
+Checks: >
+  -*,
+  bugprone-misplaced-widening-cast,
+  bugprone-sizeof-expression,
+  bugprone-suspicious-memory-comparison,
+  bugprone-suspicious-memset-usage,
+  bugprone-too-small-loop-variable,
+  cppcoreguidelines-virtual-class-destructor,
+  modernize-deprecated-headers,
+  modernize-use-auto,
+  modernize-use-bool-literals,
+  modernize-use-default-member-init,
+  modernize-use-equals-default,
+  modernize-use-nullptr,
+  modernize-use-override,
+  performance-avoid-endl,
+  performance-inefficient-vector-operation,
+  performance-unnecessary-value-param,
+  readability-const-return-type,
+  readability-container-size-empty,
+  readability-convert-member-functions-to-static,
+  readability-else-after-return,
+  readability-make-member-function-const,
+  readability-math-missing-parentheses,
+  readability-named-parameter,
+  readability-non-const-parameter,
+  readability-qualified-auto,
+  readability-redundant-declaration,
+  readability-redundant-member-init,
+  readability-redundant-string-cstr,
+  readability-simplify-boolean-expr
+
+# Headers under src/ only; a finding in tests/support is about a fixture.
+#
+# This is also what keeps third-party style out of scope. Qt and FFmpeg arrive
+# through -isystem/-iframework, so SystemHeaders below already skips them; the
+# allow-list here is the second guard, since anything outside src/ cannot match.
+# Those libraries keep their own conventions, and this project's use of a Qt
+# virtual is spelled Qt's way -- see CONTRIBUTING.md, "Coding style".
+#
+# Check any edit here by hand: a deliberate slip in a .h must still be reported.
+# This read `\.hpp$` after the sources were renamed to .h and matched nothing,
+# and a filter that matches nothing looks exactly like one that finds nothing.
+HeaderFilterRegex: 'src/.*\.h$'
+
+# The default, set explicitly: a third-party header is never this project's
+# style problem.
+SystemHeaders: false
+
+WarningsAsErrors: ''
+FormatStyle: file
+
+# The check writes `T* p{nullptr}` by default; this tree uses assignment
+# throughout, so pin it rather than gain a second spelling.
+CheckOptions:
+  modernize-use-default-member-init.UseAssignment: true

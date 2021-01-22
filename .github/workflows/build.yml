@@ -1,0 +1,83 @@
+# Does the project build and do the tests pass, on each supported platform.
+# Static analysis lives in lint.yml with the other source gates; sanitizers live
+# in sanitizers.yml, which installs a different dependency set and fails in a
+# different way.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: scripts
+    strategy:
+      # An FFmpeg API that moved between majors breaks one leg; which leg is
+      # most of the diagnosis.
+      fail-fast: false
+      matrix:
+        # Pinned images. The two legs still span the FFmpeg range this project
+        # cares about -- 24.04 carries 6.1, the floor CMakeLists.txt requires,
+        # and Homebrew tracks the newest -- but now they say which versions
+        # that means instead of "whatever today is".
+        #
+        # Homebrew's ffmpeg is the one thing deliberately left unpinned: it is
+        # the canary for a new FFmpeg major, which is most of why there is a
+        # macOS leg. One drifting axis is a signal; two is a guessing game,
+        # which is why the style gates are not on this matrix at all.
+        include:
+          - name: Ubuntu
+            os: ubuntu-24.04
+            install: install-deps-ubuntu.sh
+          - name: macOS
+            os: macos-15
+            install: install-deps-macos.sh
+    steps:
+      - uses: actions/checkout@v5
+
+      # Neither leg wants the unversioned clang-format and clang-tidy these
+      # scripts install by default: every style gate lives in lint.yml, with
+      # its own pinned copy of the tool. macOS would pull a ~1.8 GB LLVM keg
+      # for them; on Ubuntu they are two apt packages that nothing then runs.
+      - name: Install dependencies
+        env:
+          QSV2FLV_WITH_LINT: 0
+        run: ./${{ matrix.install }}
+
+      # ffprobe is what turns CliSmoke's last assertion from "the output is not
+      # empty" into "the output is a file a demuxer will open". apt's
+      # libavformat-dev does not bring the binaries, so that assertion was
+      # silently skipping itself on Linux; Homebrew's ffmpeg formula ships
+      # them, so macOS already had it. Installed here so the check either runs
+      # on both legs or fails loudly on neither.
+      - name: Install ffprobe
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y --no-install-recommends ffmpeg
+
+      # No build settings in this file. `ci-release` in CMakePresets.json is the
+      # whole configuration, so a contributor reproduces this leg with the same
+      # command rather than reassembling it from YAML. build.sh stays in front
+      # of the preset because Homebrew's keg-only Qt cannot be located from a
+      # JSON file -- that needs a `brew --prefix` at run time.
+      - name: Build
+        run: ./build.sh --preset ci-release
+
+      # CliSmoke is one of these now, so there is no separate step for the
+      # shipped binary: `ctest` here runs what `ctest` runs on a laptop.
+      - name: Test
+        run: ./run-tests.sh --preset ci-release

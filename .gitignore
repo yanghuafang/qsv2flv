@@ -1,0 +1,130 @@
+# -----------------------------------------------------------------------------
+# Compiled output
+# -----------------------------------------------------------------------------
+*.d
+*.slo
+*.lo
+*.o
+*.obj
+*.gch
+*.pch
+
+# Libraries
+*.a
+*.la
+*.lai
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Executables and debug symbols
+*.exe
+*.out
+*.app
+*.dSYM/
+*.pdb
+*.ilk
+
+# -----------------------------------------------------------------------------
+# CMake and build directories
+# -----------------------------------------------------------------------------
+# scripts/build.sh builds into a sibling of the repo (../qsv2flv-build), so the
+# source tree stays clean. These cover a plain `cmake -B build` from the root,
+# which is what a first-time visitor types.
+build/
+Build/
+build-*/
+cmake-build-*/
+out/
+
+CMakeFiles/
+CMakeCache.txt
+CMakeUserPresets.json
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# -----------------------------------------------------------------------------
+# Test, sanitizer and coverage artifacts
+# -----------------------------------------------------------------------------
+CTestTestfile.cmake
+Testing/
+LastTest.log
+*.gcda
+*.gcno
+*.gcov
+*.profraw
+*.profdata
+
+# -----------------------------------------------------------------------------
+# Qt generated sources
+# -----------------------------------------------------------------------------
+# moc, uic and rcc output. None of it is written by hand; the next build
+# regenerates all of it.
+*_autogen/
+moc_*.cpp
+moc_*.h
+ui_*.h
+qrc_*.cpp
+
+# -----------------------------------------------------------------------------
+# IDEs and editors
+# -----------------------------------------------------------------------------
+# Qt Creator
+*.pro.user
+*.pro.user.*
+CMakeLists.txt.user*
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.vcxproj.user
+
+# CLion and other JetBrains IDEs
+.idea/
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
+# clangd / language-server index cache
+.cache/
+
+# vim, emacs, gedit, nano
+*~
+*.swp
+*.swo
+*.swn
+\#*\#
+.\#*
+
+# -----------------------------------------------------------------------------
+# Platforms
+# -----------------------------------------------------------------------------
+# macOS: Finder metadata, AppleDouble sidecars on non-APFS volumes
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux: KDE per-folder view, NFS silly-rename temporaries
+.directory
+.Trash-*
+.nfs*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# -----------------------------------------------------------------------------
+# Project
+# -----------------------------------------------------------------------------
+# Sample videos. Nothing here needs one — the suite builds its own fixtures
+# (docs/Testing.md) — but they land here while debugging a report, and they are
+# large and not ours to redistribute.
+*.qsv

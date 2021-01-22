@@ -1,0 +1,27 @@
+BasedOnStyle: Google
+IndentWidth: 2
+ColumnLimit: 80
+
+# Google's include order: own header, C system, C++ standard library, other
+# libraries, this project. Priority 0 is clang-format's own slot for a .cc's
+# matching header. The two <> rules split C from C++ by the trailing .h.
+#
+# CaseSensitive is not the default and matters: case-insensitively, [a-z_] also
+# matches <QList>, putting every Qt header in the standard-library group and
+# sorting it ahead. Check any edit here by confirming <atomic> still precedes
+# <QList> in gui/converter_thread.h.
+#
+# FFmpeg headers match none of these; they only appear inside `extern "C"`,
+# which clang-format will not sort across.
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:         '^<[a-z_]+\.h>'
+    Priority:      1
+    CaseSensitive: true
+  - Regex:         '^<[a-z_]+>'
+    Priority:      2
+    CaseSensitive: true
+  - Regex:         '^<.*'
+    Priority:      3
+  - Regex:         '^".*'
+    Priority:      4

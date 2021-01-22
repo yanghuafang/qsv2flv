@@ -1,0 +1,89 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
+
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "description": "Layout shared by every preset. binaryDir is a sibling of the repo so the source tree stays clean, and ${presetName} gives each configuration its own directory so switching between them does not thrash one CMake cache.",
+      "binaryDir": "${sourceDir}/../qsv2flv-build/${presetName}",
+      "cacheVariables": {
+        "QSV2FLV_WERROR": "OFF"
+      }
+    },
+
+    {
+      "name": "release",
+      "inherits": "base",
+      "displayName": "Release (GUI + CLI + tests)",
+      "description": "What a contributor builds by default. -Werror stays off: a compiler upgrade can add a warning at any time and a fresh clone should still build.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "QSV2FLV_BUILD_GUI": "ON",
+        "QSV2FLV_BUILD_TESTS": "ON"
+      }
+    },
+
+    {
+      "name": "cli-only",
+      "inherits": "release",
+      "displayName": "Release, no Qt (CLI + tests)",
+      "description": "For a headless machine that will only ever run qsv2flv-cli. The counterpart to QSV2FLV_WITH_GUI=0 in the install scripts, and the answer to a `Could NOT find Qt6` that is not worth fixing.",
+      "cacheVariables": { "QSV2FLV_BUILD_GUI": "OFF" }
+    },
+
+    {
+      "name": "asan-ubsan",
+      "inherits": "base",
+      "displayName": "Debug + AddressSanitizer + UndefinedBehaviorSanitizer",
+      "description": "No Qt: nothing the sanitizers care about is in the GUI, and skipping it keeps QApplication's static registries out of the report. ASan and UBSan share a binary safely; TSan would not, and would need a preset of its own.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "QSV2FLV_BUILD_GUI": "OFF",
+        "QSV2FLV_BUILD_TESTS": "ON",
+        "QSV2FLV_ASAN": "ON",
+        "QSV2FLV_UBSAN": "ON"
+      }
+    },
+
+    {
+      "name": "ci-release",
+      "inherits": "release",
+      "displayName": "Release as CI builds it",
+      "description": "release plus -Werror. A separate preset rather than -DQSV2FLV_WERROR=ON in the workflow, so no build setting lives in YAML and `cmake --list-presets` enumerates every configuration this project has.",
+      "cacheVariables": { "QSV2FLV_WERROR": "ON" }
+    },
+
+    {
+      "name": "ci-asan-ubsan",
+      "inherits": "asan-ubsan",
+      "displayName": "Sanitizers as CI builds them",
+      "description": "asan-ubsan plus -Werror. The sanitizer build compiles the same sources at a different optimisation level, where the compiler's uninitialised-use analysis reaches different conclusions.",
+      "cacheVariables": { "QSV2FLV_WERROR": "ON" }
+    }
+  ],
+
+  "buildPresets": [
+    { "name": "release", "configurePreset": "release" },
+    { "name": "cli-only", "configurePreset": "cli-only" },
+    { "name": "asan-ubsan", "configurePreset": "asan-ubsan" },
+    { "name": "ci-release", "configurePreset": "ci-release" },
+    { "name": "ci-asan-ubsan", "configurePreset": "ci-asan-ubsan" }
+  ],
+
+  "testPresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "description": "--output-on-failure always: the suites print the file, line and both sides of every failed comparison, and none of that is worth anything if CTest swallows it behind \"Failed\". noTestsAction=error catches a configuration that silently built no tests, which otherwise reads as a pass -- CTest's own default is to shrug and exit 0.",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error" }
+    },
+    { "name": "release", "inherits": "base", "configurePreset": "release" },
+    { "name": "cli-only", "inherits": "base", "configurePreset": "cli-only" },
+    { "name": "asan-ubsan", "inherits": "base", "configurePreset": "asan-ubsan" },
+    { "name": "ci-release", "inherits": "base", "configurePreset": "ci-release" },
+    { "name": "ci-asan-ubsan", "inherits": "base", "configurePreset": "ci-asan-ubsan" }
+  ]
+}

@@ -1,0 +1,82 @@
+# Its own file, not a leg of the build matrix. The dependency set differs (no
+# Qt), the runtime environment differs, and the failure mode differs -- a leg
+# that shares none of those with its neighbours is a separate job wearing a
+# matrix costume.
+name: Sanitizers
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Branch protection requires this job by name, as it does every other check
+  # here. TSan would be a second job rather than a flag on this one: it cannot
+  # be linked into the same binary as ASan.
+  asan-ubsan:
+    name: ASan + UBSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: scripts
+    env:
+      # LeakSanitizer off: FFmpeg's one-time static allocations are reported and
+      # cannot be freed here, and they cannot be suppressed by module either --
+      # this project's own buffers also come from av_malloc, so `leak:libavutil`
+      # would hide both. Worth enabling by hand (detect_leaks=1) when changing
+      # FFmpeg object lifetimes, and on Linux only: LSan does not exist on macOS,
+      # where detect_leaks=1 aborts every test instead.
+      ASAN_OPTIONS: detect_leaks=0
+      # print_stacktrace, because UBSan collects one only when asked.
+      # halt_on_error, because UBSan's default is to print and carry on, which
+      # produces a green build full of real undefined behaviour. The build also
+      # passes -fno-sanitize-recover=all (CMakeLists.txt), so this is the second
+      # of two locks rather than the only one -- but that flag is easy to lose
+      # in a refactor and this line is not.
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - uses: actions/checkout@v5
+
+      # Ubuntu 24.04 raised vm.mmap_rnd_bits to 32. ASan runtimes older than
+      # LLVM 18 / GCC 14 cannot place their shadow region under that much
+      # entropy and die at startup with "Shadow memory range interleaves with
+      # an existing memory mapping", which reads as a broken build rather than
+      # a kernel setting. build-essential on 24.04 installs GCC 13, so this
+      # project is squarely in range. Set explicitly rather than trusting the
+      # runner image to keep doing it.
+      - name: Lower ASLR entropy for ASan
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      # No Qt: nothing the sanitizers care about is in the GUI, and skipping it
+      # keeps QApplication's static registries out of the report. The cost is
+      # that src/gui/converter_thread.cc -- the only threaded code here -- is
+      # never sanitized. Closing that needs a TSan job rather than a flag on
+      # this one: TSan and ASan cannot be linked into the same binary.
+      - name: Install dependencies
+        env:
+          QSV2FLV_WITH_GUI: 0
+          QSV2FLV_WITH_LINT: 0
+        run: ./install-deps-ubuntu.sh
+
+      # As on the build legs: without it CliSmoke's demuxer check skips itself.
+      - name: Install ffprobe
+        run: sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Build
+        run: ./build.sh --preset ci-asan-ubsan
+
+      # ReaderTest drives 200 garbage buffers through the parser and asserts
+      # only "did not crash". ASan is what makes that a real check. CliSmoke
+      # runs here too, so the shipped binary is sanitized as well as the suites.
+      - name: Test
+        run: ./run-tests.sh --preset ci-asan-ubsan

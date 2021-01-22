@@ -1,0 +1,103 @@
+# The style and static-analysis gates: clang-format and clang-tidy. Grouped by
+# what they are -- checks on source that no test can make -- rather than by what
+# they cost, which is why clang-tidy sits here despite needing a build. Separate
+# jobs, so clang-format still answers in seconds instead of waiting on a
+# compiler.
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Most CI debugging starts by re-running one job by hand. Without this the
+  # only way to get a run is an empty commit.
+  workflow_dispatch:
+
+# Nothing here writes to the repository. Declared per file rather than left to
+# a repository default, so a workflow cannot widen its own token by omission.
+permissions:
+  contents: read
+
+# A force-push to a pull request supersedes the run in flight and finishing it
+# buys nothing. Pushes to main are left alone: main is what a release is cut
+# from, so every commit on it gets a real answer.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  clang-format:
+    # Needs no FFmpeg, no Qt and no compile step, so it answers in well under a
+    # minute -- and being its own job is what keeps it that way.
+    #
+    # Pinned image, and the tool pinned separately below. clang-format majors
+    # disagree about line breaking, so the version is the contract this gate
+    # enforces, and a rolling label would carry that version with it: the day
+    # GitHub repoints ubuntu-latest at the next LTS, every open pull request
+    # goes red on code nobody touched.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v5
+
+      # Ubuntu's llvm packages install under /usr/lib/llvm-NN, which is exactly
+      # the layout llvm-env.sh's QSV2FLV_LLVM_PREFIX already expects -- the
+      # escape hatch for this was in the repo before the need for it was.
+      # Pinning the tool rather than only the image means this gate survives the
+      # image being bumped for a security fix.
+      - name: Install clang-format 18
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-format-18
+          # Fail here, with the reason, rather than a step later as
+          # "clang-format not found" -- which would be true but would point at
+          # a missing package instead of a moved path.
+          test -x /usr/lib/llvm-18/bin/clang-format
+          echo "QSV2FLV_LLVM_PREFIX=/usr/lib/llvm-18" >> "$GITHUB_ENV"
+
+      - run: ./format.sh --check
+
+  clang-tidy:
+    # The one gate here that needs a compiler. tidy.sh reads the compile
+    # database CMake writes, and analyses all of src/ -- including src/gui, so
+    # the build has to be a Qt build or every GUI file is analysed with default
+    # flags and dies on its first Qt include.
+    #
+    # That means this job builds the project a second time rather than reusing
+    # Build / Ubuntu's tree: jobs do not share a filesystem, and passing one
+    # through as an artifact costs more than the minute it saves. The trade is
+    # deliberate -- clang-tidy is visible as its own check instead of hiding
+    # inside a build job.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v5
+
+      # QSV2FLV_WITH_LINT=0: the unversioned clang-tidy this would otherwise
+      # install is not the one that runs. Qt is left on, because the analysis
+      # needs it.
+      - name: Install dependencies
+        env:
+          QSV2FLV_WITH_LINT: 0
+        run: ./install-deps-ubuntu.sh
+
+      # Pinned for the same reason as clang-format: .clang-tidy names a curated
+      # check list, and a check list gains members when the analyser's major
+      # moves, so an unpinned analyser can fail this gate on unchanged code.
+      - name: Install clang-tidy 18
+        run: |
+          sudo apt-get install -y --no-install-recommends clang-tidy-18
+          test -x /usr/lib/llvm-18/bin/clang-tidy
+          echo "QSV2FLV_LLVM_PREFIX=/usr/lib/llvm-18" >> "$GITHUB_ENV"
+
+      - name: Build for the compile database
+        run: ./build.sh --preset ci-release
+
+      - run: ./tidy.sh --preset ci-release

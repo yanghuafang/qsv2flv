@@ -1,0 +1,23 @@
+qsv2flv
+Copyright (c) 2026 yanghuafang
+
+Licensed under the MIT License; see LICENSE.
+
+Attribution
+-----------
+
+The analysis of the .qsv container format that this program depends on — the
+header and index-record layout, and the two obfuscation schemes — is the work
+of btnkij (https://github.com/btnkij/qsv2flv), who published it as a Windows
+application together with the reverse-engineering notes in that project's
+secret/ directory. docs/QsvFormat.md is a rewritten and extended account of
+that analysis, and docs/PortingNotes.md records where this implementation
+departs from the original's behaviour.
+
+That project carries no licence file, so this notice is a credit rather than a
+claim about its terms. The code in this repository is an independent
+implementation: the container parser, the remuxer, both front ends, the build
+system and the test suite were written for this project. What is shared with
+the original is knowledge of a file format — the field offsets and the
+obfuscation algorithms — which the notes above set out as fact rather than as
+copied source.
